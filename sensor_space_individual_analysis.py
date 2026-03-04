@@ -99,6 +99,8 @@ def run_individual_analysis(config):
     # Time window of interest
     t_min_interest = config['time_window']['tmin']
     t_max_interest = config['time_window']['tmax']
+    t_min_baseline = config['csd']['baseline_tmin']
+    t_max_baseline = config['csd']['baseline_tmax']
     
     print(f"\n{'='*60}")
     print(f"Starting Sensor Space Analysis for Subject: {subject_name}")
@@ -261,6 +263,13 @@ def run_individual_analysis(config):
     csd_2.save(os.path.join(output_folder, f'{subject_name}_{condition_2}_csd.h5'),
               overwrite=True)
     print(f"  ✓ Condition '{condition_2}' CSD computed")
+    
+    csd_base = mne.time_frequency.csd_morlet(
+        epochs_full, frequencies, tmin=t_min_baseline, tmax=t_max_baseline,
+        n_cycles=n_cycles, decim=decim, n_jobs=n_jobs, verbose=False)
+    csd_base.save(os.path.join(output_folder, f'{subject_name}_baseline_csd.h5'),
+              overwrite=True)
+    print(f"  ✓ Baseline CSD computed")
     
     # ========================================
     # Analysis Complete
