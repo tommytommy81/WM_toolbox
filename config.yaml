@@ -4,11 +4,11 @@
 
 # PATHS AND FILE INFORMATION
 paths:
-  data_folder: '/Users/administrator/__PC_HSE/Results/Yulia K/Data/S1'  # Main folder containing MEG data
+  data_folder: '/Users/administrator/__PC_HSE/Results/Yulia K/Data/meg'  # Main folder containing MEG data
   output_folder: '/Users/administrator/__PC_HSE/Results/Yulia K/Output'   # Folder for analysis outputs
-  
+  subjects_dir: '/Users/administrator/__PC_HSE/Results/Yulia K/Data/freesurfer/subjects'  # FreeSurfer subjects directory
 subject:
-  name: 'S1'                                 # Subject identifier
+  subject_name: 'S1'                                 # Subject identifier
   file_name: 'sub-001_main2_cleaned2-raw.fif'  # Input MEG file name
 
 # EXPERIMENTAL CONDITIONS
@@ -284,7 +284,7 @@ csd:
 
 # GROUP STATISTICS PARAMETERS
 statistics:
-  num_subjects: 3                            # Number of subjects in group analysis
+  num_subjects: 3                           # Number of subjects in group analysis
   ch_type: 'grad'                            # Channel type for statistics
   alpha: 0.05                                # Significance level
   threshold: 0.01                            # P-value threshold for cluster formation
@@ -310,3 +310,38 @@ processing:
   skip_ica: true                             # Set to true to skip ICA
   skip_visual_inspection: true               # Set to true to skip all plotting
   n_jobs: 7                                  # Number of parallel jobs for computation
+
+
+# Source space parameters
+source_space: 
+  spacing: 'ico4'                    # Source space decimation: 'ico4', 'ico5', 'oct6'
+  surfaces: 'white'                  # Brain surface: 'white', 'pial'
+  orientation: 'coronal'               # Slice orientation for visualization
+    
+    
+# Forward model parameters
+forward_model:
+  conductivity: [0.3]                # BEM conductivity (single shell)
+  ico: 5                              # BEM surface decimation
+  mindist: 5.0                  # Minimum distance from inner skull (mm)
+  surfaces: 'white'                  # Surface for source space
+  coord_frame: 'mri'                   # Coordinate frame: 'mri' or 'head'
+    
+    
+# Source estimate parameters
+source_estimate: 
+  freq_min: 8                         # Minimum frequency (Hz)
+  freq_max: 12                        # Maximum frequency (Hz)
+  orientation: 'fix'                  # Orientation constraint: 'fix', 'free', 'loose'
+  surf_ori: True                     # Orient dipoles perpendicular to cortex
+  force_fixed: True                  # Force fixed orientation
+  reg: 0.05                          # Regularization parameter
+  depth: 1.0                         # Depth weighting
+  method: 'single'                    # Inversion method: 'single', 'matrix'
+
+    
+# Visualization parameters
+visualization:
+  hemi: 'both'                     # Hemisphere: 'lh', 'rh', 'both'
+  surface: 'inflated'                # Surface type: 'inflated', 'pial', 'white'
+  views: ['dorsal', 'lateral', 'medial', 'ventral']  # View angles

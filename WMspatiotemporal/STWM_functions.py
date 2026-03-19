@@ -4,6 +4,29 @@
 @author: Nikita Otstavnov, 2023
 """
 
+# Standard library imports
+import os
+import os.path as op
+
+# Third-party imports
+import numpy as np
+import scipy
+import matplotlib.pyplot as plt
+import mne
+
+# MNE-specific imports
+from mne.preprocessing import ICA, create_eog_epochs, create_ecg_epochs, corrmap
+from mne.stats import spatio_temporal_cluster_1samp_test, summarize_clusters_stc
+
+# Scipy imports
+from scipy import stats as stats
+
+# FOOOF imports
+from fooof import FOOOF
+from fooof.sim.gen import gen_aperiodic
+from fooof.plts.spectra import plot_spectrum, plot_spectra
+
+
 ################################# SENSOR SPACE ANALYSIS
 def perform_initial_analysis(n_components, random_state, max_iter, 
                              stim_channel,list_channels,
@@ -11,18 +34,7 @@ def perform_initial_analysis(n_components, random_state, max_iter,
                              file_name, subject_name, min_freqs, 
                              max_freqs, notch_freq, n_jobs):
     
-    ### ESSENTIAL LIBRARIES
-    import os
-    import mne
-    from   mne.preprocessing import (ICA, 
-                                     create_eog_epochs, 
-                                     create_ecg_epochs,
-                                     corrmap)
-    
-   
-
     ### DOWNLOADING THE DATA 
-    os.chdir(folder)
     file_to_read     = os.path.join(folder, file_name) 
     raw_data         = mne.io.read_raw_fif(file_to_read, 
                                              allow_maxshield=False, 
@@ -73,15 +85,13 @@ def perform_initial_analysis(n_components, random_state, max_iter,
     ica.exclude      = ica.exclude + ecg_indices
     
     #SAVER
-    ica.save('{}-ica.fif'.format(subject_name), overwrite=True)
+    ica.save(op.join(folder, '{}-ica.fif'.format(subject_name)), overwrite=True)
     
     return raw_data, ica, ica.exclude 
 
 
 # #### ICA APPLY
 def ica_apply(data, ica, subject_name):
-    from   mne.preprocessing import ICA
-    import os
     ica.apply(data )
     data.plot()
     
@@ -91,7 +101,6 @@ def ica_apply(data, ica, subject_name):
 def event_renaming(data, stim_channel, list_channels, 
                    subject_name, meg):
 
-    import mne
     a = 0
     i = 0
     
@@ -114,25 +123,21 @@ def event_renaming(data, stim_channel, list_channels,
     return data, event
 
 def raw_data_saver(folder, data, subject_name, meg):
-    import os
-    import mne
-    os.chdir(folder) 
     
     #### TAKING ONLY PARTICULAR CHANNELS FOR FUTURE ANALYSIS
     data_2           = data.copy().pick_types(meg="grad", exclude=[])
 
     
-    data_2.save('{}_filtered.fif'.format(subject_name), overwrite=True)
-    data_2.annotations.save('{}_-annotations.csv'.format(subject_name),
+    data_2.save(op.join(folder, '{}_filtered.fif'.format(subject_name)), overwrite=True)
+    data_2.annotations.save(op.join(folder, '{}_-annotations.csv'.format(subject_name)),
                             overwrite = True)
     return data_2
 
-
+# not used for now, but can be used for future analysis
 def epochs_initialization(data, event, main_event_1, main_event_2, 
                           tmin_epo, tmax_epo, 
                           reject_criteria, flat_criteria, subject_name, 
                           condition_1, condition_2, ch_type):
-    import mne
     epochs_1         = mne.Epochs(data, event, event_id=main_event_1,             #155 - Delay Spatial
                                   tmin=tmin_epo, tmax=tmax_epo, 
                                   reject = reject_criteria, 
@@ -155,9 +160,9 @@ def epochs_initialization(data, event, main_event_1, main_event_2,
                                   picks = ch_type,
                                   baseline=(None,None))
      
-    epochs_1.save( '{}_{}_epochs-epo.fif'.format(subject_name, condition_1),  overwrite=True)
-    epochs_2.save( '{}_{}_epochs-epo.fif'.format(subject_name, condition_2),  overwrite=True)
-    epochs_full.save( '{}_ave_epochs-epo.fif'.format(subject_name),  overwrite=True)
+    epochs_1.save(op.join(folder, '{}_{}_epochs-epo.fif'.format(subject_name, condition_1)),  overwrite=True)
+    epochs_2.save(op.join(folder, '{}_{}_epochs-epo.fif'.format(subject_name, condition_2)),  overwrite=True)
+    epochs_full.save(op.join(folder, '{}_ave_epochs-epo.fif'.format(subject_name)),  overwrite=True)
 
     return epochs_1, epochs_2, epochs_full    
 
@@ -169,207 +174,26 @@ def evoked_data(epochs_1, epochs_2, subject_name, condition_1, condition_2):
     fig_1            = evoked_1.plot(titles = 'Evoked data of {} for condition {}'.format(subject_name, condition_1))
     fig_2            = evoked_2.plot(titles = 'Evoked data of {} for condition {}'.format(subject_name, condition_2))
     
-    fig_1.savefig('Evoked data of {} for condition {}'.format(subject_name, condition_1)) 
-    fig_2.savefig('Evoked data of {} for condition {}'.format(subject_name, condition_2))
+    fig_1.savefig(op.join(folder, 'Evoked data of {} for condition {}'.format(subject_name, condition_1))) 
+    fig_2.savefig(op.join(folder, 'Evoked data of {} for condition {}'.format(subject_name, condition_2)))
   
     return evoked_1, evoked_2
                   
-def time_freq(epochs_1, epochs_2, min_freq, max_freq,freq_res, decim, n_jobs, 
-              n_cycles, subject_name, condition_1, condition_2): 
-    import mne
-    import numpy as np 
-    
-    frequencies = np.logspace(min_freq,max_freq, num=freq_res)
-
-    power_1, itc_1   = mne.time_frequency.tfr_morlet(epochs_1, 
-                                                     n_cycles=n_cycles, 
-                                                     return_itc=True,
-                                                     freqs=frequencies, 
-                                                     decim=decim, n_jobs=n_jobs)
-    
-    power_2, itc_2   = mne.time_frequency.tfr_morlet(epochs_2, 
-                                                     n_cycles=n_cycles, 
-                                                     return_itc=True,
-                                                     freqs=frequencies, 
-                                                     decim=decim, n_jobs=n_jobs) 
-    
-    power_1.save('{}_power_{}-tfr.h5'.format(subject_name, condition_1))
-    power_2.save('{}_power_{}-tfr.h5'.format(subject_name, condition_2))
-    itc_1.save('{}_itc_{}-tfr.h5'.format(subject_name, condition_1))
-    itc_2.save('{}_itc_{}-tfr.h5'.format(subject_name, condition_2))
-   
-    return itc_1, itc_2, power_1, power_2
-
-
-def fooof_application(power_1, power_2, t_interest_min, t_interest_max,
-                      subject_name, condition_1, condition_2, min_freq, max_freq, 
-                      freq_res):
-    from   fooof import FOOOF
-    from   fooof.sim.gen import gen_aperiodic
-    from   fooof.plts.spectra import plot_spectrum, plot_spectra
-    import mne 
-    import numpy as np
-    
-    frequencies = np.logspace(min_freq,max_freq, num=freq_res)
-    ###### CROPPING
-   
-    power_1.crop(t_interest_min,t_interest_max)
-    power_2.crop(t_interest_min,t_interest_max)
-    
-    
-    fm                   = FOOOF()
-    list_1_ped_ordered   =   []
-    print(len(list_1_ped_ordered))
-    list_1_aper_ordered  =  []
-    print(len(list_1_aper_ordered))
-    list_2_ped_ordered   =   []
-    print(len(list_2_ped_ordered))
-    list_2_aper_ordered  =  []
-    print(len(list_2_aper_ordered))
-    
-    ###### FOOOF splitter
-    ########## CONDITION_1
-    #PREPARATORY PHASE
-
-    spectrum_peak        = np.array([])                                                #Here we store everything for 204 channel in 1 subject
-    spectrum_aper        = np.array([])
-   
-    c                    = power_1.freqs
-    a                    = c 
-    
-    #AVERAGING ACROSS TIME DIM
-    b                    = power_1.data
-    a.shape
-    b.shape
-    f                    = np.mean(b, axis=2)                                                      ### This is exactly the place when we lose time dimension
-    type(f)
-    f.shape
-    spectrum             = f
-    np.shape(spectrum)
-       
-    ch                   = 0 
-    for ch in np.arange(204):       
-        spec             = spectrum[ch, :]
-        spec.shape
-        fm.fit(a, spec)
-        fm.report()
-        fm.save('FOOOF_{}_сropped_results_{}_{}'.format(subject_name, condition_1,ch), 
-                                                        save_results=True, 
-                                                        save_settings=True,
-                                                        save_data=True)
-        init_ap_fit      = gen_aperiodic(fm.freqs, 
-                                         fm._robust_ap_fit(fm.freqs, 
-                                                           fm.power_spectrum))
-        type(init_ap_fit)
-        np.shape(init_ap_fit)
-        init_flat_spec = fm.power_spectrum - init_ap_fit
-        type(init_flat_spec)
-        np.shape(init_flat_spec)
-
-        spectrum_peak    = np.append(spectrum_peak, init_flat_spec.T)
-        spectrum_aper    = np.append(spectrum_aper, init_ap_fit.T)
-        print(spectrum_peak.size)
-        print(spectrum_aper.size)
-        print(spectrum_peak.shape)
-    
-        spectrum_peak    = np.reshape(spectrum_peak,
-                                      [ch+1,len(frequencies)]) 
-        spectrum_aper    = np.reshape(spectrum_aper,
-                                      [ch+1,len(frequencies)]) 
-        print(spectrum_peak.shape)
-        print(spectrum_aper.shape)
-
-       
-    list_1_ped_ordered  = spectrum_peak
-    list_1_aper_ordered = spectrum_aper
-
-    
-    ########## CONDITION_2
-    spectrum_peak_2     = np.array([])    
-    spectrum_aper_2     = np.array([])
-    c                   = power_2.freqs
-    a                   = c
-    b                   = power_2.data
-    a.shape
-    b.shape
-    f                   = np.mean(b, axis=2)
-    type(f)
-    f.shape
-    freqs               = a 
-    freqs.shape  
-    spectrum            = f          
-   
-    ch                  = 0
-    for ch in np.arange(204):       
-        spec            = spectrum[ch, :]
-        spec.shape
-        fm.fit(freqs, spec)
-        fm.report()
-        fm.save('FOOOF_{}_сropped_results_{}_{}'.format(subject_name, condition_2,ch), 
-                                                        save_results=True, 
-                                                        save_settings=True, 
-                                                        save_data=True)
-        init_ap_fit     = gen_aperiodic(fm.freqs, 
-                                        fm._robust_ap_fit(fm.freqs, 
-                                                          fm.power_spectrum))
-        type(init_ap_fit)
-        np.shape(init_ap_fit)
-        init_flat_spec  = fm.power_spectrum - init_ap_fit
-        type(init_flat_spec)
-        np.shape(init_flat_spec)
-
-        spectrum_peak_2 = np.append(spectrum_peak_2, init_flat_spec.T)
-        spectrum_aper_2 = np.append(spectrum_aper_2, init_ap_fit.T)
-        spectrum_peak_2.size
-        spectrum_aper_2.size
-        spectrum_peak_2.shape
-    
-        spectrum_peak_2 = np.reshape(spectrum_peak_2,[ch+1,len(frequencies)]) 
-        spectrum_aper_2 = np.reshape(spectrum_aper_2,[ch+1,len(frequencies)]) 
-        spectrum_peak_2.shape
-        spectrum_aper_2.shape
-
-    list_2_ped_ordered  = spectrum_peak_2
-    list_2_aper_ordered = spectrum_aper_2
-
-    ###### SAVER
-    a                   = np.array(list_1_ped_ordered)
-    type(a)
-    a.shape
-    b                   = np.array(list_1_aper_ordered)
-    type(b)
-    b.shape
-    c                   = np.array(list_2_ped_ordered)
-    type(c)
-    c.shape
-    d                   = np.array(list_2_aper_ordered)
-    type(d)
-    d.shape
-    
-    np.save(file='{}_{}_ped_crop.npy'.format(subject_name,condition_1), arr=a)
-    np.save(file='{}_{}_aper_crop.npy'.format(subject_name,condition_1), arr=b)
-    np.save(file='{}_{}_ped_crop.npy'.format(subject_name,condition_2), arr=c)
-    np.save(file='{}_{}_aper_crop.npy'.format(subject_name,condition_2), arr=d)
-
-    return list_1_ped_ordered, list_1_aper_ordered, list_2_ped_ordered, list_2_aper_ordered, fm
 
 
 def fooof_merger(num_subjects, folder, condition_1, condition_2): 
-    import numpy as np
-    import os
     
     list_1_ped_ordered        =  []
     list_1_aper_ordered       =  []
     list_2_ped_ordered        =  []
     list_2_aper_ordered       =  []
 
-    os.chdir(folder) 
     i = 0 
     for i in range(num_subjects):
-        list_1_ped_ordered.append(np.load(file='S{}_{}_ped_crop.npy'.format(i+1,condition_1)))  
-        list_1_aper_ordered.append(np.load(file='S{}_{}_aper_crop.npy'.format(i+1,condition_1)))
-        list_2_ped_ordered.append(np.load(file='S{}_{}_ped_crop.npy'.format(i+1,condition_2)))
-        list_2_aper_ordered.append(np.load(file='S{}_{}_aper_crop.npy'.format(i+1,condition_2)))
+        list_1_ped_ordered.append(np.load(op.join(folder,'S{}_{}_ped_crop.npy'.format(i+1,condition_1))))  
+        list_1_aper_ordered.append(np.load(op.join(folder,'S{}_{}_aper_crop.npy'.format(i+1,condition_1))))
+        list_2_ped_ordered.append(np.load(op.join(folder,'S{}_{}_ped_crop.npy'.format(i+1,condition_2))))
+        list_2_aper_ordered.append(np.load(op.join(folder,'S{}_{}_aper_crop.npy'.format(i+1,condition_2))))
         
         
     list_1_ped_ordered_array  = np.array(list_1_ped_ordered)
@@ -377,10 +201,10 @@ def fooof_merger(num_subjects, folder, condition_1, condition_2):
     list_2_ped_ordered_array  = np.array(list_2_ped_ordered)
     list_2_aper_ordered_array = np.array(list_2_aper_ordered)
    
-    np.save(file='list_{}_ped_crop.npy'.format(condition_1), arr=list_1_ped_ordered_array)
-    np.save(file='list_{}_aper_crop.npy'.format(condition_1), arr=list_1_aper_ordered_array)
-    np.save(file='list_{}_ped_crop.npy'.format(condition_2), arr=list_2_ped_ordered_array)
-    np.save(file='list_{}_aper_crop.npy'.format(condition_2), arr=list_2_aper_ordered_array)
+    np.save(op.join(folder,'list_{}_ped_crop.npy'.format(condition_1)), arr=list_1_ped_ordered_array)
+    np.save(op.join(folder,'list_{}_aper_crop.npy'.format(condition_1)), arr=list_1_aper_ordered_array)
+    np.save(op.join(folder,'list_{}_ped_crop.npy'.format(condition_2)), arr=list_2_ped_ordered_array)
+    np.save(op.join(folder,'list_{}_aper_crop.npy'.format(condition_2)), arr=list_2_aper_ordered_array)
 
     return list_1_ped_ordered_array, list_1_aper_ordered_array, list_2_ped_ordered_array, list_2_aper_ordered_array
 
@@ -388,15 +212,9 @@ def fooof_merger(num_subjects, folder, condition_1, condition_2):
 def sensor_statistics(folder, subject_name, condition_1, ch_type,
                       list_1_ped, list_2_ped, alpha,
                       threshold, n_permutations, tail, out_type):
-    import os
-    import mne
-    import numpy as np
-    import scipy
-    from scipy import stats as stats
     
-    os.chdir(folder) 
-    epochs = mne.read_epochs('{}_{}_epochs-epo.fif'.format(subject_name, 
-                                                            condition_1), 
+    epochs = mne.read_epochs(op.join(folder,'{}_{}_epochs-epo.fif'.format(subject_name, 
+                                                            condition_1)), 
                                                             preload=False)
     info                                   = epochs.info
     adj, ch_names                          = mne.channels.find_ch_adjacency(info, 
@@ -447,7 +265,6 @@ def sensor_statistics(folder, subject_name, condition_1, ch_type,
              T_obs_plot[c]                = T_obs[c]
            
              
-    import matplotlib.pyplot as plt
     fig, ax                               = plt.subplots(2, 1)
     ax[0].imshow(T_obs, aspect='auto', origin='lower', cmap='RdBu_r', 
             vmin=-5, vmax=5)     
@@ -462,30 +279,25 @@ def csd_calc(min_freq, max_freq, freq_res, folder, subject_name,
              condition_1, condition_2, t_interest_min, t_interest_max, 
              n_cycles, decim, n_jobs): 
     
-    import mne
-    import numpy as np
-    import os 
-    
     frequencies = np.logspace(min_freq,max_freq, num=freq_res)
   
-    os.chdir(folder) 
-    epochs_1    = mne.read_epochs('{}_{}_epochs-epo.fif'.format(subject_name, 
-                                                                condition_1), preload=True)
-    epochs_2    = mne.read_epochs('{}_{}_epochs-epo.fif'.format(subject_name, 
-                                                                condition_2), preload=True)
+    epochs_1    = mne.read_epochs(op.join(folder, '{}_{}_epochs-epo.fif'.format(subject_name, 
+                                                                condition_1)), preload=True)
+    epochs_2    = mne.read_epochs(op.join(folder, '{}_{}_epochs-epo.fif'.format(subject_name, 
+                                                                condition_2)), preload=True)
 
     csd_1       = mne.time_frequency.csd_morlet(epochs_1, frequencies, tmin=t_interest_min, 
                                                 tmax=t_interest_max, 
                                                 n_cycles=n_cycles, decim=decim, n_jobs=n_jobs)   
     
-    csd_1.save('{}_{}_csd.h5'.format(subject_name, condition_1), 
+    csd_1.save(op.join(folder, '{}_{}_csd.h5'.format(subject_name, condition_1)), 
                overwrite=True, verbose=None)
     
     csd_2       = mne.time_frequency.csd_morlet(epochs_2, frequencies, 
                                                 tmin=t_interest_min, 
                                                 tmax=t_interest_max, n_cycles=n_cycles,
                                                 decim=decim, n_jobs=n_jobs)
-    csd_2.save('{}_{}_csd.h5'.format(subject_name, condition_2), 
+    csd_2.save(op.join(folder, '{}_{}_csd.h5'.format(subject_name, condition_2)), 
                overwrite=True, verbose=None)
 
     return csd_1, csd_2
@@ -497,15 +309,10 @@ def csd_average(min_freq, max_freq, freq_res, subject_name,
                    decim, n_jobs, ch_type, flat_criteria,reject_criteria, 
                    main_event_1, main_event_2, event):
     
-    import numpy as np
-    import mne 
-    import os
- 
     frequencies = np.logspace(min_freq,max_freq, num=freq_res)
     
      
-    os.chdir(folder) 
-    epochs      = mne.read_epochs('{}_ave_epochs-epo.fif'.format(subject_name),
+    epochs      = mne.read_epochs(op.join(folder, '{}_ave_epochs-epo.fif'.format(subject_name)),
                                   preload=True)
 
     csd_av      = mne.time_frequency.csd_morlet(epochs, frequencies, 
@@ -513,7 +320,7 @@ def csd_average(min_freq, max_freq, freq_res, subject_name,
                                                 n_cycles=n_cycles, decim=decim, 
                                                 n_jobs=n_jobs)
 
-    csd_av.save('{}_average_base_csd.h5'.format(subject_name), 
+    csd_av.save(op.join(folder, '{}_average_base_csd.h5'.format(subject_name)), 
                  overwrite=True, verbose=None)   
     
     return csd_av
@@ -522,13 +329,8 @@ def csd_average(min_freq, max_freq, freq_res, subject_name,
 ################################# SOURCE SPACE ANALYSIS
 def visual_freesurfer_check(subject_name, folder, 
                             file_name, subjects_dir): 
-    #libraries
-    import mne
-    import os 
-    import os.path as op
     
     # raw data
-    os.chdir(folder)
     file_to_read       = os.path.join(folder, file_name) 
     raw_data           = mne.io.read_raw_fif(file_to_read, 
                                              allow_maxshield=False, 
@@ -538,7 +340,6 @@ def visual_freesurfer_check(subject_name, folder,
     info               = raw_data.info
     
     # visualization
-    os.chdir(folder) 
     trans              = op.join(folder, '{}-trans.fif'.format(subject_name))
     mne.viz.plot_alignment(info, trans, subject=subject_name, dig=True,
                            meg=['helmet', 'sensors'], 
@@ -548,8 +349,6 @@ def visual_freesurfer_check(subject_name, folder,
 def creating_source_space_object(subject_name, subjects_dir,
                                  spacing, brain_surfaces, folder, n_jobs, 
                                  orientation): 
-    import os        
-    import mne
     #### SURFACE SOURCE SPACE
     src             = mne.setup_source_space(subject_name, spacing=spacing, 
                                              subjects_dir = subjects_dir, 
@@ -560,20 +359,16 @@ def creating_source_space_object(subject_name, subjects_dir,
                            slices=[50, 100, 150, 200])
     
     mne.viz.plot_bem(src=src, **plot_bem_kwargs)
-    os.chdir(folder) 
-    mne.write_source_spaces('{}-{}-src.fif'.format(subject_name,spacing), src, 
+    mne.write_source_spaces(os.path.join(folder, '{}-{}-src.fif'.format(subject_name,spacing)), src, 
                             overwrite = True)
       
     return src
 
 def creating_average_source_space(spacing, subjects_dir, folder): 
-    import os
-    import mne 
     
     src_avg                 = mne.setup_source_space('fsaverage', spacing = spacing,  
                                                      subjects_dir = subjects_dir)
-    os.chdir(folder) 
-    mne.write_source_spaces('Av-{}-src.fif'.format(spacing), src_avg, 
+    mne.write_source_spaces(os.path.join(folder, 'Av-{}-src.fif'.format(spacing)), src_avg, 
                             overwrite = True)
    
     return src_avg
@@ -581,15 +376,11 @@ def creating_average_source_space(spacing, subjects_dir, folder):
 def creating_forward_model(folder, subject_name, spacing, conductivity, 
                            subjects_dir, mindist, n_jobs, ico, surfaces,
                            coord_frame): 
-    import os 
-    import mne 
-    import os.path as op
     
-    os.chdir(folder) 
-    src_surf            = mne.read_source_spaces('{}-{}-src.fif'.format(subject_name,spacing))
+    src_surf            = mne.read_source_spaces(op.join(folder, '{}-{}-src.fif'.format(subject_name,spacing)))
     trans               = op.join(folder, '{}-trans.fif'.format(subject_name))
    
-    SDFR                = folder + '/' +'S1_filtered.fif'
+    SDFR                = op.join(folder, 'S1_filtered.fif')
     data                = mne.io.read_raw_fif(SDFR, allow_maxshield=False, 
                                               preload=False, on_split_missing='raise', 
                                               verbose=None)
@@ -601,7 +392,7 @@ def creating_forward_model(folder, subject_name, spacing, conductivity,
                                              subjects_dir=subjects_dir)
     bem                 = mne.make_bem_solution(model)
     
-    mne.write_bem_solution('{}-ind-bem-sol.fif'.format(subject_name), bem, 
+    mne.write_bem_solution(op.join(folder, '{}-ind-bem-sol.fif'.format(subject_name)), bem, 
                                 overwrite=True, verbose=None)
        
     fwd                 = mne.make_forward_solution(info, trans=trans,
@@ -609,7 +400,7 @@ def creating_forward_model(folder, subject_name, spacing, conductivity,
                                                     meg=True, eeg=False, mindist=mindist,
                                                     verbose=True, n_jobs=n_jobs)
    
-    mne.write_forward_solution('{}-{}-surf-fwd.fif'.format(subject_name, spacing), 
+    mne.write_forward_solution(op.join(folder, '{}-{}-surf-fwd.fif'.format(subject_name, spacing)), 
                                fwd, overwrite = True) 
     fig                = mne.viz.plot_alignment(subject=subject_name, 
                                                    subjects_dir=subjects_dir,
@@ -624,21 +415,17 @@ def creating_forward_model(folder, subject_name, spacing, conductivity,
 def creating_average_forward_model(folder, subject_name, spacing, conductivity, 
                            subjects_dir, mindist, n_jobs, ico, 
                            surfaces, coord_frame): 
-    import os 
-    import mne
-    import os.path as op
   
-    os.chdir(folder) 
-    src_surf            = mne.read_source_spaces('{}-{}-src.fif'.format(subject_name,spacing))
+    src_surf            = mne.read_source_spaces(op.join(folder, '{}-{}-src.fif'.format(subject_name,spacing)))
     trans               = op.join(folder, 'Av-trans.fif')
    
-    SDFR                = folder + '/' +'S1_filtered.fif'
+    SDFR                = op.join(folder, 'S1_filtered.fif')
     data                = mne.io.read_raw_fif(SDFR, allow_maxshield=False, 
                                               preload=False, on_split_missing='raise', 
                                               verbose=None)
     info                = data.info
    
-    src_avg             = mne.read_source_spaces('Av-{}-src.fif'.format(spacing))
+    src_avg             = mne.read_source_spaces(op.join(folder, 'Av-{}-src.fif'.format(spacing)))
     conductivity        = conductivity            
     model               = mne.make_bem_model(subject='fsaverage', ico=ico,
                                              conductivity=conductivity, 
@@ -651,7 +438,7 @@ def creating_average_forward_model(folder, subject_name, spacing, conductivity,
                                                     src=src_avg, bem=bem,  
                                                     meg=True, eeg=False, mindist=mindist,
                                                     verbose=True, n_jobs = n_jobs )
-    mne.write_forward_solution('Av-{}-surf-fwd.fif'.format(spacing), 
+    mne.write_forward_solution(op.join(folder, 'Av-{}-surf-fwd.fif'.format(spacing)), 
                                fwd_av, overwrite = True) 
     
     fig                = mne.viz.plot_alignment(subject='Average', 
@@ -670,25 +457,21 @@ def creating_source_estimate_object(folder, subject_name, spacing,
                                     freq_min, freq_max, orientation, 
                                     surf_ori, force_fixed, reg, depth, 
                                     inversion):
-    import os
-    import mne   
-    import os.path as op
 
-    os.chdir(folder) 
     trans               = op.join(folder, '{}-trans.fif'.format(subject_name))
      
-    SDFR                = folder + '/' +'S1_filtered.fif'
+    SDFR                = op.join(folder, 'S1_filtered.fif')
     data                = mne.io.read_raw_fif(SDFR, allow_maxshield=False, 
                                               preload=False, on_split_missing='raise', 
                                               verbose=None)
     info                = data.info
         
-    fwd_ind             = mne.read_forward_solution('{}-{}-surf-fwd.fif'.format(subject_name,spacing)) 
-    src_surf            = mne.read_source_spaces('{}-{}-src.fif'.format(subject_name,spacing))
+    fwd_ind             = mne.read_forward_solution(op.join(folder, '{}-{}-surf-fwd.fif'.format(subject_name,spacing))) 
+    src_surf            = mne.read_source_spaces(op.join(folder, '{}-{}-src.fif'.format(subject_name,spacing)))
         
-    csd_1               = mne.time_frequency.read_csd('{}_{}_csd.h5'.format(subject_name, condition_1))
-    csd_2               = mne.time_frequency.read_csd('{}_{}_csd.h5'.format(subject_name, condition_2))      
-    csd_Ab              = mne.time_frequency.read_csd('{}_average_base_csd.h5'.format(subject_name))        
+    csd_1               = mne.time_frequency.read_csd(op.join(folder, '{}_{}_csd.h5'.format(subject_name, condition_1)))
+    csd_2               = mne.time_frequency.read_csd(op.join(folder, '{}_{}_csd.h5'.format(subject_name, condition_2)))      
+    csd_Ab              = mne.time_frequency.read_csd(op.join(folder, '{}_average_base_csd.h5'.format(subject_name)))        
     freq_min            = freq_min
     freq_max            = freq_max   
     orientation         = orientation                                                    #free, fixed, tang
@@ -715,33 +498,33 @@ def creating_source_estimate_object(folder, subject_name, spacing,
                                                          real_filter=True, depth = depth) 
         
     print(dics_filter)
-    dics_filter.save('{}_from_{}_to_{}_{}_ind-dics.h5'.format(subject_name, 
+    dics_filter.save(op.join(folder, '{}_from_{}_to_{}_{}_ind-dics.h5'.format(subject_name, 
                                                                  freq_min, 
                                                                  freq_max,
-                                                                 orientation), 
+                                                                 orientation)), 
                      overwrite = True)
     
     stc_1,  freq_1      = mne.beamformer.apply_dics_csd(csd_1,  dics_filter)
     stc_2,  freq_2      = mne.beamformer.apply_dics_csd(csd_2,  dics_filter)
     stc_Ab, freq_Ab     = mne.beamformer.apply_dics_csd(csd_Ab, dics_filter)
     
-    stc_1.save( '{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name, 
+    stc_1.save(op.join(folder, '{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name, 
                                                                      freq_min, 
                                                                      freq_max, 
                                                                      orientation,
-                                                                     condition_1),
+                                                                     condition_1)),
                overwrite=True) 
-    stc_2.save( '{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name, 
+    stc_2.save(op.join(folder, '{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name, 
                                                                       freq_min, 
                                                                       freq_max, 
                                                                       orientation,
-                                                                      condition_2),
+                                                                      condition_2)),
                overwrite=True) 
-    stc_Ab.save('{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(  subject_name, 
+    stc_Ab.save(op.join(folder, '{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(  subject_name, 
                                                                     freq_min, 
                                                                     freq_max, 
                                                                     orientation,
-                                                                    condition_3),
+                                                                    condition_3)),
                 overwrite=True)
     
     return stc_1, stc_2, stc_Ab, src_surf
@@ -750,29 +533,25 @@ def creating_source_estimate_object(folder, subject_name, spacing,
 def source_estimate_morphing_to_average(folder, subject_name, spacing, freq_min, 
                                         freq_max, orientation,
                                         condition_1, condition_2, condition_3, subjects_dir): 
-    import mne
-    import os 
-    import os.path as op
 
-    os.chdir(folder) 
-    stc_1        = mne.read_source_estimate('{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name, 
+    stc_1        = mne.read_source_estimate(op.join(folder, '{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name, 
                                                                                          freq_min, 
                                                                                          freq_max, 
                                                                                          orientation,
-                                                                                         condition_1)) 
-    stc_2        = mne.read_source_estimate('{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name, 
+                                                                                         condition_1))) 
+    stc_2        = mne.read_source_estimate(op.join(folder, '{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name, 
                                                                                          freq_min, 
                                                                                          freq_max, 
                                                                                          orientation,
-                                                                                         condition_2))
-    stc_A        = mne.read_source_estimate('{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name,
+                                                                                         condition_2)))
+    stc_A        = mne.read_source_estimate(op.join(folder, '{}_from_{}_to_{}_{}_ind_surf_{}_stc'.format(subject_name,
                                                                                          freq_min, 
                                                                                          freq_max, 
                                                                                          orientation,
-                                                                                         condition_3))
+                                                                                         condition_3)))
                                         
-    src_surf     = mne.read_source_spaces('{}-{}-src.fif'.format(subject_name,spacing))
-    src_surf_av  = mne.read_source_spaces('Av-{}-src.fif'.format(spacing))
+    src_surf     = mne.read_source_spaces(op.join(folder, '{}-{}-src.fif'.format(subject_name,spacing)))
+    src_surf_av  = mne.read_source_spaces(op.join(folder, 'Av-{}-src.fif'.format(spacing)))
 
     stc_1_to_morph   = stc_1      
     stc_2_to_morph   = stc_2
@@ -797,10 +576,10 @@ def source_estimate_morphing_to_average(folder, subject_name, spacing, freq_min,
                                         add_data_kwargs=None, 
                                         brain_kwargs=None, verbose=None)
 
-    brain_before.save_image('{}_from_{}_to_{}_{}_cont_before.png'.format(subject_name, 
+    brain_before.save_image(op.join(folder, '{}_from_{}_to_{}_{}_cont_before.png'.format(subject_name, 
                                                                      freq_min, 
                                                                      freq_max, 
-                                                                     orientation))
+                                                                     orientation)))
     
     morph_surf_1     = mne.compute_source_morph(stc_1_to_morph, 
                                      subject_from=subject_name, 
@@ -829,41 +608,41 @@ def source_estimate_morphing_to_average(folder, subject_name, spacing, freq_min,
     stc_fs_2         = morph_surf_2.apply(stc_2_to_morph)
     stc_fs_A         = morph_surf_A.apply(stc_A_to_morph)    
    
-    stc_fs_1.save('{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(subject_name,
+    stc_fs_1.save(op.join(folder, '{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(subject_name,
                                                                  freq_min, 
                                                                  freq_max, 
                                                                  orientation,
-                                                                 condition_1), 
+                                                                 condition_1)), 
                                                                  overwrite=True)
-    stc_fs_2.save('{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(subject_name,
+    stc_fs_2.save(op.join(folder, '{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(subject_name,
                                                                  freq_min, 
                                                                  freq_max, 
                                                                  orientation,
-                                                                 condition_2), 
+                                                                 condition_2)), 
                                                                  overwrite=True)
-    stc_fs_A.save('{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(subject_name,
+    stc_fs_A.save(op.join(folder, '{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(subject_name,
                                                                  freq_min, 
                                                                  freq_max, 
                                                                  orientation,
-                                                                 condition_3), 
+                                                                 condition_3)), 
                                                                  overwrite=True)              
-    morph_surf_1.save('{}_from_{}_to_{}_{}_morph_surf_{}.h5'.format(subject_name,
+    morph_surf_1.save(op.join(folder, '{}_from_{}_to_{}_{}_morph_surf_{}.h5'.format(subject_name,
                                                                  freq_min, 
                                                                  freq_max, 
                                                                  orientation,
-                                                                 condition_1), 
+                                                                 condition_1)), 
                                                                  overwrite=True)
-    morph_surf_2.save('{}_from_{}_to_{}_{}_morph_surf_{}.h5'.format(subject_name,
+    morph_surf_2.save(op.join(folder, '{}_from_{}_to_{}_{}_morph_surf_{}.h5'.format(subject_name,
                                                                  freq_min, 
                                                                  freq_max, 
                                                                  orientation,
-                                                                 condition_1), 
+                                                                 condition_1)), 
                                                                  overwrite=True)
-    morph_surf_A.save('{}_from_{}_to_{}_{}_morph_surf_{}.h5'.format(subject_name,
+    morph_surf_A.save(op.join(folder, '{}_from_{}_to_{}_{}_morph_surf_{}.h5'.format(subject_name,
                                                                  freq_min, 
                                                                  freq_max, 
                                                                  orientation,
-                                                                 condition_1), 
+                                                                 condition_1)), 
                                                                  overwrite=True)
     
     return stc_fs_1, stc_fs_2, stc_fs_A, src_surf, src_surf_av
@@ -874,12 +653,7 @@ def stc_merger(folder, num_subject,
                orientation, condition_1, condition_2, condition_3,
                subjects_dir, spacing):
  
-    import numpy as np 
-    import mne 
-    import os
-    
-    os.chdir(folder) 
-    src_fs      = mne.read_source_spaces('Av-{}-src.fif'.format(spacing))
+    src_fs      = mne.read_source_spaces(op.join(folder, 'Av-{}-src.fif'.format(spacing)))
     stc_surf_1  = []
     stc_surf_2  = [] 
     stc_surf_a  = []
@@ -889,21 +663,21 @@ def stc_merger(folder, num_subject,
 
     i           = 1
     for i in index:
-        stc_surf_1.append(mne.read_source_estimate('S{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(i,
+        stc_surf_1.append(mne.read_source_estimate(op.join(folder, 'S{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(i,
                                                                                               freq_min, 
                                                                                               freq_max, 
                                                                                               orientation,
-                                                                                              condition_1))) 
-        stc_surf_2.append( mne.read_source_estimate('S{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(i,
+                                                                                              condition_1)))) 
+        stc_surf_2.append( mne.read_source_estimate(op.join(folder, 'S{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(i,
                                                                                               freq_min, 
                                                                                               freq_max, 
                                                                                               orientation,
-                                                                                              condition_2))) 
-        stc_surf_a.append(mne.read_source_estimate('S{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(i,
+                                                                                              condition_2))) )
+        stc_surf_a.append(mne.read_source_estimate(op.join(folder, 'S{}_from_{}_to_{}_{}_morph_surf_{}_stc'.format(i,
                                                                                               freq_min, 
                                                                                               freq_max, 
                                                                                               orientation,
-                                                                                              condition_3))) 
+                                                                                              condition_3)))) 
         
                           
      
@@ -918,7 +692,6 @@ def source_estimate_visualization(stc, subject_name,
                                   views, volume_options, view_layout, surface,
                                   annotation, mode, subjects_dir, backend,condition): 
  
-    import mne
     mne.viz.set_3d_options(depth_peeling=False, antialias=False, multi_samples=1)   
 
     src       = mne.read_source_spaces('{}-{}-src.fif'.format(subject_name,spacing))
@@ -952,7 +725,6 @@ def source_estimate_visualization_morph(stc, subject_name,
                                   views, volume_options, view_layout, surface,
                                   annotation, mode, subjects_dir, backend,condition): 
  
-    import mne
     mne.viz.set_3d_options(depth_peeling=False, antialias=False, multi_samples=1)   
 
     src_fs    = mne.read_source_spaces('Av-{}-src.fif'.format(spacing))
@@ -987,7 +759,6 @@ def source_estimate_average_visual_checher(stc_surf_1, stc_surf_2, stc_surf_a,
                                    views, volume_options, view_layout, surface,
                                    annotation, mode, subjects_dir, backend): 
    
-    import mne
     mne.viz.set_3d_options(depth_peeling=False, antialias=False, multi_samples=1)   
 
     src_fs             = mne.read_source_spaces('Av-{}-src.fif'.format(spacing))
@@ -1025,16 +796,7 @@ def statistical_inference(num_subject, stc_s,
                           p_threshold, n_permutations, tstep,
                           n_jobs, out_type, buffer_size, alpha_level):
     
-    import numpy as np
-    import mne 
-    import os
-    import scipy
-    from scipy import stats as stats
-    from mne.stats import (spatio_temporal_cluster_1samp_test,
-                            summarize_clusters_stc)
-    
-    os.chdir(folder) 
-    src_fs   = mne.read_source_spaces('Av-{}-src.fif'.format(spacing))
+    src_fs   = mne.read_source_spaces(op.join(folder, 'Av-{}-src.fif'.format(spacing)))
    
     group_1 = []
     group_2 = []
@@ -1099,7 +861,6 @@ def stat_visualization(stc_new, freq_min, freq_max, spacing,
                        views, volume_options, view_layout, surface,
                        annotation, mode, subjects_dir, backend): 
    
-    import mne
     mne.viz.set_3d_options(depth_peeling=False, antialias=False, multi_samples=1)   
 
     src_fs    = mne.read_source_spaces('Av-{}-src.fif'.format(spacing))

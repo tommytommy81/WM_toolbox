@@ -67,7 +67,6 @@ def merge_fooof_results(num_subjects, folder, condition_1, condition_2):
     list_2_aper : array
         Aperiodic component for condition 2
     """
-    os.chdir(folder)
     
     list_1_ped = []
     list_1_aper = []
@@ -79,15 +78,17 @@ def merge_fooof_results(num_subjects, folder, condition_1, condition_2):
     for i in range(num_subjects):
         subject_id = i + 1
         
+        result_folder = os.path.join(folder, f'S{subject_id}')
+        
         # Load condition 1
-        ped_1 = np.load(f'S{subject_id}_{condition_1}_ped_crop.npy')
-        aper_1 = np.load(f'S{subject_id}_{condition_1}_aper_crop.npy')
+        ped_1 = np.load(os.path.join(result_folder, f'S{subject_id}_{condition_1}_ped_crop.npy'))
+        aper_1 = np.load(os.path.join(folder, f'S{subject_id}_{condition_1}_aper_crop.npy'))
         list_1_ped.append(ped_1)
         list_1_aper.append(aper_1)
         
         # Load condition 2
-        ped_2 = np.load(f'S{subject_id}_{condition_2}_ped_crop.npy')
-        aper_2 = np.load(f'S{subject_id}_{condition_2}_aper_crop.npy')
+        ped_2 = np.load(os.path.join(result_folder, f'S{subject_id}_{condition_2}_ped_crop.npy'))
+        aper_2 = np.load(os.path.join(result_folder, f'S{subject_id}_{condition_2}_aper_crop.npy'))
         list_2_ped.append(ped_2)
         list_2_aper.append(aper_2)
         
@@ -104,10 +105,10 @@ def merge_fooof_results(num_subjects, folder, condition_1, condition_2):
     print(f"  Condition '{condition_2}' periodic: {list_2_ped_array.shape}")
     
     # Save merged results
-    np.save(f'list_{condition_1}_ped_crop.npy', list_1_ped_array)
-    np.save(f'list_{condition_1}_aper_crop.npy', list_1_aper_array)
-    np.save(f'list_{condition_2}_ped_crop.npy', list_2_ped_array)
-    np.save(f'list_{condition_2}_aper_crop.npy', list_2_aper_array)
+    np.save(os.path.join(folder, f'list_{condition_1}_ped_crop.npy'), list_1_ped_array)
+    np.save(os.path.join(folder, f'list_{condition_1}_aper_crop.npy'), list_1_aper_array)
+    np.save(os.path.join(folder, f'list_{condition_2}_ped_crop.npy'), list_2_ped_array)
+    np.save(os.path.join(folder, f'list_{condition_2}_aper_crop.npy'), list_2_aper_array)
     print(f"  ✓ Merged results saved")
     
     return list_1_ped_array, list_1_aper_array, list_2_ped_array, list_2_aper_array
@@ -287,7 +288,7 @@ def run_group_statistics(config):
     # ========================================
     print("Step 1: Merging FOOOF results across subjects...")
     list_1_ped, list_1_aper, list_2_ped, list_2_aper = merge_fooof_results(
-        num_subjects, folder, condition_1, condition_2)
+        num_subjects, output_folder, condition_1, condition_2)
     
     # ========================================
     # STEP 2: Perform statistical analysis
@@ -295,7 +296,7 @@ def run_group_statistics(config):
     print("\nStep 2: Performing statistical analysis...")
     
     # Get epochs file for channel information
-    epochs_file = os.path.join(folder, f'{subject_name}_{condition_1}_epochs-epo.fif')
+    epochs_file = os.path.join(output_folder, f'{subject_name}_{condition_1}_epochs-epo.fif')
     
     # Run statistics on periodic component
     T_obs, T_obs_plot, clusters, cluster_p_values = perform_cluster_statistics(

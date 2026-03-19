@@ -19,7 +19,7 @@ import argparse
 import yaml
 import numpy as np
 import mne
-from WMspatiotemporal.STWM_functions import (
+from STWM_functions_core import (
     creating_source_space_object,
     creating_forward_model,
     creating_source_estimate_object,
@@ -48,10 +48,9 @@ def run_source_analysis(config):
     # Extract parameters
     folder = config['paths']['data_folder']
     output_folder = config['paths'].get('output_folder', folder)
-    file_name = config['subject']['file_name']
-    subject_name = config['subject']['name']
-    
     subjects_dir = config['paths']['subjects_dir']
+    subject_name = config['subject']['subject_name']
+    file_name    = config['subject']['file_name']
     
     # Conditions
     condition_1 = config['conditions']['condition_1']['name']
@@ -99,7 +98,7 @@ def run_source_analysis(config):
     # ========================================
     print("Step 1: Creating source space...")
     try:
-        source_space = creating_source_space_object(
+        source_space = creating_source_space_object(file_name,
             subject_name, subjects_dir, spacing, brain_surfaces,
             folder, n_jobs, orientation)
         print(f"  ✓ Source space created with spacing: {spacing}")
@@ -112,7 +111,7 @@ def run_source_analysis(config):
     # ========================================
     print("\nStep 2: Creating forward model...")
     try:
-        forward_model = creating_forward_model(
+        forward_model = creating_forward_model(file_name,
             folder, subject_name, spacing, conductivity,
             subjects_dir, mindist, n_jobs, ico, surfaces, coord_frame)
         print(f"  ✓ Forward model created")

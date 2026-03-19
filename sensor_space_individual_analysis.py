@@ -61,24 +61,32 @@ def run_individual_analysis(config):
     """
     
     # Extract parameters from config
-    folder = config['paths']['data_folder']
-    output_folder = config['paths'].get('output_folder', folder)
-    subject_name = config['subject']['name']
-    file_name = config['subject']['file_name']
+    folder          = config['paths']['data_folder']
+    output_folder   = config['paths'].get('output_folder', folder)
+    subject_name    = config['subject']['subject_name']
+    file_name       = config['subject']['file_name']
     
-    condition_1 = config['conditions']['condition_1']['name']
-    condition_2 = config['conditions']['condition_2']['name']
-    event_id_1 = config['conditions']['condition_1']['event_id']
-    event_id_2 = config['conditions']['condition_2']['event_id']
+    results_folder     = os.path.join(output_folder, subject_name)
     
-    stim_channel = config['events']['stim_channel']
-    ch_type = config['channels']['meg_type']
+    # creat subfolder for subject results
+    if os.path.exists(results_folder):
+        print(f"Warning: Output folder for subject '{subject_name}' already exists. Files may be overwritten.") 
+    else:
+        os.makedirs(results_folder, exist_ok=True)
+    
+    condition_1     = config['conditions']['condition_1']['name']
+    condition_2     = config['conditions']['condition_2']['name']
+    event_id_1      = config['conditions']['condition_1']['event_id']
+    event_id_2      = config['conditions']['condition_2']['event_id']
+    
+    stim_channel    = config['events']['stim_channel']
+    ch_type         = config['channels']['meg_type']
     
     # Epoching parameters
-    tmin = config['epoching']['tmin']
-    tmax = config['epoching']['tmax']
+    tmin            = config['epoching']['tmin']
+    tmax            = config['epoching']['tmax']
     reject_criteria = config['epoching']['reject_criteria']
-    flat_criteria = config['epoching']['flat_criteria']
+    flat_criteria   = config['epoching']['flat_criteria']
     
     # Convert reject and flat criteria values to float if they're strings
     if reject_criteria is not None:
@@ -89,18 +97,18 @@ def run_individual_analysis(config):
                         for k, v in flat_criteria.items()}
     
     # Time-frequency parameters
-    min_freq_log = config['time_frequency']['min_freq_log']
-    max_freq_log = config['time_frequency']['max_freq_log']
-    freq_res = config['time_frequency']['freq_resolution']
-    n_cycles = config['time_frequency']['n_cycles']
-    decim = config['time_frequency']['decim']
-    n_jobs = config['processing']['n_jobs']
+    min_freq_log    = config['time_frequency']['min_freq_log']
+    max_freq_log    = config['time_frequency']['max_freq_log']
+    freq_res        = config['time_frequency']['freq_resolution']
+    n_cycles        = config['time_frequency']['n_cycles']
+    decim           = config['time_frequency']['decim']
+    n_jobs          = config['processing']['n_jobs']
     
     # Time window of interest
-    t_min_interest = config['time_window']['tmin']
-    t_max_interest = config['time_window']['tmax']
-    t_min_baseline = config['csd']['baseline_tmin']
-    t_max_baseline = config['csd']['baseline_tmax']
+    t_min_interest  = config['time_window']['tmin']
+    t_max_interest  = config['time_window']['tmax']
+    t_min_baseline  = config['csd']['baseline_tmin']
+    t_max_baseline  = config['csd']['baseline_tmax']
     
     print(f"\n{'='*60}")
     print(f"Starting Sensor Space Analysis for Subject: {subject_name}")
@@ -113,8 +121,9 @@ def run_individual_analysis(config):
     # STEP 1: Load preprocessed data
     # ========================================
     print("Step 1: Loading preprocessed data...")
-    file_path = os.path.join(folder, file_name)
-    raw_data = mne.io.read_raw_fif(file_path, preload=True, verbose=False)
+    file_path = os.path.join(folder, subject_name, file_name)
+    raw_data  = mne.io.read_raw_fif(file_path, preload=True, verbose=False)
+
     print(f"  ✓ Loaded: {file_name}")
     print(f"  ✓ Duration: {raw_data.times[-1]:.2f} seconds")
     print(f"  ✓ Channels: {len(raw_data.ch_names)} total")
@@ -148,7 +157,7 @@ def run_individual_analysis(config):
                          reject=reject_criteria, flat=flat_criteria,
                          preload=True, picks=ch_type,
                          baseline=None, verbose=False)
-    epochs_1.save(os.path.join(output_folder, f'{subject_name}_{condition_1}_epochs-epo.fif'),
+    epochs_1.save(os.path.join(results_folder, f'{subject_name}_{condition_1}_epochs-epo.fif'),
                  overwrite=True)
     print(f"  ✓ Condition '{condition_1}': {len(epochs_1)} epochs")
     print(f"     Saved: {subject_name}_{condition_1}_epochs-epo.fif")
@@ -159,7 +168,7 @@ def run_individual_analysis(config):
                          reject=reject_criteria, flat=flat_criteria,
                          preload=True, picks=ch_type,
                          baseline=None, verbose=False)
-    epochs_2.save(os.path.join(output_folder, f'{subject_name}_{condition_2}_epochs-epo.fif'),
+    epochs_2.save(os.path.join(results_folder, f'{subject_name}_{condition_2}_epochs-epo.fif'),
                  overwrite=True)
     print(f"  ✓ Condition '{condition_2}': {len(epochs_2)} epochs")
     print(f"     Saved: {subject_name}_{condition_2}_epochs-epo.fif")
@@ -170,7 +179,7 @@ def run_individual_analysis(config):
                             reject=reject_criteria, flat=flat_criteria,
                             preload=True, picks=ch_type,
                             baseline=None, verbose=False)
-    epochs_full.save(os.path.join(output_folder, f'{subject_name}_ave_epochs-epo.fif'),
+    epochs_full.save(os.path.join(results_folder, f'{subject_name}_ave_epochs-epo.fif'),
                     overwrite=True)
     print(f"  ✓ Combined epochs: {len(epochs_full)} epochs")
     
@@ -188,9 +197,9 @@ def run_individual_analysis(config):
     power_1, itc_1 = epochs_1.compute_tfr(
         method="morlet", freqs=frequencies, n_cycles=n_cycles,
         decim=decim, n_jobs=n_jobs, return_itc=True, average=True, verbose=False)
-    power_1.save(os.path.join(output_folder, f'{subject_name}_power_{condition_1}-tfr.h5'),
+    power_1.save(os.path.join(results_folder, f'{subject_name}_power_{condition_1}-tfr.h5'),
                 overwrite=True)
-    itc_1.save(os.path.join(output_folder, f'{subject_name}_itc_{condition_1}-tfr.h5'),
+    itc_1.save(os.path.join(results_folder, f'{subject_name}_itc_{condition_1}-tfr.h5'),
               overwrite=True)
     print(f"  ✓ Condition '{condition_1}' TFR computed")
     
@@ -198,9 +207,9 @@ def run_individual_analysis(config):
     power_2, itc_2 = epochs_2.compute_tfr(
         method="morlet", freqs=frequencies, n_cycles=n_cycles,
         decim=decim, n_jobs=n_jobs, return_itc=True, average=True, verbose=False)
-    power_2.save(os.path.join(output_folder, f'{subject_name}_power_{condition_2}-tfr.h5'),
+    power_2.save(os.path.join(results_folder, f'{subject_name}_power_{condition_2}-tfr.h5'),
                 overwrite=True)
-    itc_2.save(os.path.join(output_folder, f'{subject_name}_itc_{condition_2}-tfr.h5'),
+    itc_2.save(os.path.join(results_folder, f'{subject_name}_itc_{condition_2}-tfr.h5'),
               overwrite=True)
     print(f"  ✓ Condition '{condition_2}' TFR computed")
     
@@ -235,13 +244,13 @@ def run_individual_analysis(config):
     print(f"     Processed {spectrum_peak_2.shape[0]} channels")
     
     # Save FOOOF results
-    np.save(os.path.join(output_folder, f'{subject_name}_{condition_1}_ped_crop.npy'),
+    np.save(os.path.join(results_folder, f'{subject_name}_{condition_1}_ped_crop.npy'),
            spectrum_peak_1)
-    np.save(os.path.join(output_folder, f'{subject_name}_{condition_1}_aper_crop.npy'),
+    np.save(os.path.join(results_folder, f'{subject_name}_{condition_1}_aper_crop.npy'),
            spectrum_aper_1)
-    np.save(os.path.join(output_folder, f'{subject_name}_{condition_2}_ped_crop.npy'),
+    np.save(os.path.join(results_folder, f'{subject_name}_{condition_2}_ped_crop.npy'),
            spectrum_peak_2)
-    np.save(os.path.join(output_folder, f'{subject_name}_{condition_2}_aper_crop.npy'),
+    np.save(os.path.join(results_folder, f'{subject_name}_{condition_2}_aper_crop.npy'),
            spectrum_aper_2)
     print(f"  ✓ FOOOF results saved")
     
@@ -253,21 +262,21 @@ def run_individual_analysis(config):
     csd_1 = mne.time_frequency.csd_morlet(
         epochs_1, frequencies, tmin=t_min_interest, tmax=t_max_interest,
         n_cycles=n_cycles, decim=decim, n_jobs=n_jobs, verbose=False)
-    csd_1.save(os.path.join(output_folder, f'{subject_name}_{condition_1}_csd.h5'),
+    csd_1.save(os.path.join(results_folder, f'{subject_name}_{condition_1}_csd.h5'),
               overwrite=True)
     print(f"  ✓ Condition '{condition_1}' CSD computed")
     
     csd_2 = mne.time_frequency.csd_morlet(
         epochs_2, frequencies, tmin=t_min_interest, tmax=t_max_interest,
         n_cycles=n_cycles, decim=decim, n_jobs=n_jobs, verbose=False)
-    csd_2.save(os.path.join(output_folder, f'{subject_name}_{condition_2}_csd.h5'),
+    csd_2.save(os.path.join(results_folder, f'{subject_name}_{condition_2}_csd.h5'),
               overwrite=True)
     print(f"  ✓ Condition '{condition_2}' CSD computed")
     
     csd_base = mne.time_frequency.csd_morlet(
         epochs_full, frequencies, tmin=t_min_baseline, tmax=t_max_baseline,
         n_cycles=n_cycles, decim=decim, n_jobs=n_jobs, verbose=False)
-    csd_base.save(os.path.join(output_folder, f'{subject_name}_baseline_csd.h5'),
+    csd_base.save(os.path.join(results_folder, f'{subject_name}_baseline_csd.h5'),
               overwrite=True)
     print(f"  ✓ Baseline CSD computed")
     
@@ -277,7 +286,7 @@ def run_individual_analysis(config):
     print(f"\n{'='*60}")
     print(f"Analysis Complete for Subject: {subject_name}")
     print(f"{'='*60}\n")
-    print(f"Output files saved to: {output_folder}")
+    print(f"Output files saved to: {results_folder}")
     print(f"\nGenerated files:")
     print(f"  - Epochs: *_epochs-epo.fif")
     print(f"  - Time-Frequency: *_power_*-tfr.h5, *_itc_*-tfr.h5")
