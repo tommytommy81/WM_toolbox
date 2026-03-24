@@ -292,6 +292,29 @@ statistics:
   tail: 0                                    # Test tail: 0 (two-tailed), 1 (one-tailed greater), -1 (one-tailed less)
   out_type: 'mask'                           # Output type: 'mask' or 'indices'
 
+# SOURCE-LEVEL GROUP STATISTICS PARAMETERS
+source_group_statistics:
+  num_subjects: 3                           # Number of subjects for source group analysis
+  n_permutations: 2000                      # Number of permutations for cluster test
+  p_threshold: 0.01                         # P-value threshold for cluster formation
+  alpha_level: 0.05                         # Significance level for cluster p-values
+  out_type: 'indices'                       # Output type for spatio_temporal_cluster_1samp_test
+  buffer_size: null                         # Buffer size (null = MNE default)
+  tstep: 1                                  # tstep passed to summarize_clusters_stc
+  condition_baseline: 'AvBase'              # Label of the baseline condition in STC file names
+
+# SOURCE-LEVEL VISUALIZATION PARAMETERS
+source_visualization:
+  colormap: 'auto'                          # Colormap for source estimates
+  time_label: 'auto'                        # Time label format
+  transparency: 0.5                         # Surface alpha / transparency
+  time_viewer: 'auto'                       # Enable interactive time viewer
+  volume_options: 1.0                       # Volume rendering options
+  view_layout: 'vertical'                   # Layout of views: 'vertical' or 'horizontal'
+  annotation: 'aparc.a2009s'               # FreeSurfer cortical parcellation annotation
+  mode: 'rgb'                               # Image save mode
+  backend: 'auto'                           # Plotting backend: 'auto', 'pyvistaqt', etc.
+
 # FOOOF (Fitting Oscillations & One-Over-F) PARAMETERS
 fooof:
   freq_range: [4, 80]                        # Frequency range for FOOOF fitting
