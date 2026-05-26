@@ -2,13 +2,18 @@
 Example Usage: Connectivity Analysis
 ====================================
 
-This script demonstrates how to run connectivity analysis on MEG data.
+This script demonstrates how to configure and run all-to-all source-space
+connectivity analysis on MEG data.
 
 Requirements:
-- Completed sensor space analysis (CSD files)
-- FreeSurfer anatomical reconstruction
-- Coregistration transformation file
+- Completed sensor space analysis (CSD files: <subject>_<condition>_csd.h5)
+- FreeSurfer anatomical reconstruction (in subjects_dir)
+- Coregistration transformation file (<subject>-trans.fif)
 - conpy package: pip install conpy
+
+The analysis itself is delegated to the functions in
+STWM_functions_for_connectivity.py, all of which receive the single `config`
+dictionary, exactly as in STWM_functions_core.py.
 
 @author: Nikita Otstavnov, 2023 (refactored 2026)
 """
@@ -23,47 +28,79 @@ import yaml
 # Create configuration dictionary
 config = {
     'paths': {
-        'data_folder': '/path/to/your/data',  # Main folder with MEG data
-        'output_folder': '/path/to/output',    # Output folder (optional)
+        'data_folder': '/path/to/your/data',    # Main folder with MEG data
+        'output_folder': '/path/to/output',      # Output folder (optional, defaults to data_folder)
         'subjects_dir': '/path/to/freesurfer/subjects'  # FreeSurfer subjects directory
     },
-    
+
     'subject': {
-        'name': 'S1',                          # Subject identifier
-        'file_name': 'S1_preprocessed-raw.fif'  # Preprocessed MEG file
+        'subject_name': 'S1',                    # Subject identifier
+        'file_name': 'S1_preprocessed-raw.fif'   # Preprocessed MEG file
     },
-    
+
     'conditions': {
         'condition_1': {
-            'name': 'Spatial',                 # First condition name
+            'name': 'Spatial',                   # First condition name
         },
         'condition_2': {
-            'name': 'Temporal',                # Second condition name
+            'name': 'Temporal',                  # Second condition name
         }
     },
-    
-    # Connectivity-specific parameters
-    'connectivity': {
-        'spacing': 'oct6',                     # Source space: 'oct6', 'ico4', 'ico5'
-        'max_sensor_dist': 0.07,               # Max distance from sensors (m)
-        'min_dist': 0.04,                      # Min distance between connected vertices (m)
-        'regularization': 0.05,                # Regularization for inverse solution
-        'freq_min': 8,                         # Minimum frequency (Hz)
-        'freq_max': 12,                        # Maximum frequency (Hz)
-        'atlas': 'aparc',                      # Brain atlas: 'aparc', 'aparc.a2009s'
-        'n_lines': 1000                        # Number of connections to visualize
-    },
-    
+
     # Forward model parameters
     'forward_model': {
-        'conductivity': [0.3],                 # BEM conductivity
-        'ico': 5,                              # BEM surface decimation
-        'mindist': 0.0                         # Minimum distance from inner skull (mm)
+        'conductivity': [0.3],                   # BEM conductivity (single shell)
+        'ico': 5,                                # BEM surface decimation
+        'mindist': 0.0                           # Minimum distance from inner skull (mm)
     },
-    
+
+    # Connectivity-specific parameters
+    'connectivity': {
+        'spacing': 'oct6',                       # Source space: 'oct6', 'ico4', 'ico5'
+        'max_sensor_dist': 0.07,                 # Max distance from sensors (m)
+        'min_dist': 0.04,                        # Min distance between connected vertices (m)
+        'regularization': 0.05,                  # Regularization for the inverse solution
+        'freq_min': 8,                           # Minimum frequency (Hz)
+        'freq_max': 12,                          # Maximum frequency (Hz)
+        'num_subjects': 3,                       # Number of subjects (group-level steps)
+        'average_ref_file': 'S1_filtered.fif',   # Reference recording for fsaverage forward info
+        'average_trans_file': 'Av-trans.fif',    # Coregistration for the fsaverage template
+
+        # Single-subject visualization
+        'atlas': 'aparc',                        # Brain atlas: 'aparc', 'aparc.a2009s'
+        'n_lines': 1000,                         # Number of connections to visualize
+        'vmin': None,                            # Lower colorbar limit (None = auto)
+        'vmax': None,                            # Upper colorbar limit (None = auto)
+        'figure': None,                          # Existing figure handle (None = new figure)
+        'size': 800,                             # Brain figure size (pixels)
+        'borders': True,                         # Draw parcellation borders
+        'hemi': 'both',                          # Hemisphere: 'lh', 'rh', 'both'
+
+        # Group-level cluster-permutation statistics
+        'cluster_threshold': 5.0,                # Cluster-forming threshold
+        'n_permutations': 1000,                  # Number of permutations
+        'alpha': 0.05,                           # Significance level
+        'tail': 0,                               # Test tail: 0, 1, or -1
+        'max_spread': 0.013,                     # Max spatial spread of a bundle (m)
+        'seed': 42,                              # RNG seed
+        'summary': 'sum',                        # Parcellation summary
+        'brain_mode': 'absmax',                  # make_stc mode for rendering
+        'hemi_stat': 'both',                     # Hemisphere for statistics rendering
+        'views': ['lateral', 'medial'],          # Views for statistics rendering
+
+        # Statistics visualization
+        'regexp': None,                          # Label-selection regular expression
+        'weight_by_degree': False,               # Weight parcellation by node degree
+        'n_lines_stat': 100,                     # Connections in statistics circle plot
+        'vmin_stat': None,                       # Lower colorbar limit for statistics
+        'vmax_stat': None,                       # Upper colorbar limit for statistics
+        'fontsize_names': 8,                     # Font size for label names
+        'fontsize_colorbar': 8                   # Font size for colorbar
+    },
+
     # Processing parameters
     'processing': {
-        'n_jobs': 4                            # Number of parallel jobs
+        'n_jobs': 4                              # Number of parallel jobs
     }
 }
 
@@ -77,7 +114,7 @@ with open(config_file, 'w') as f:
     yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
 print(f"Configuration saved to: {config_file}")
-print("\nTo run connectivity analysis, use:")
+print("\nTo run connectivity analysis for one subject, use:")
 print(f"python connectivity_individual_analysis.py --config {config_file} --subject S1")
 
 # ============================================================================
@@ -90,209 +127,93 @@ print("="*70)
 print("""
 1. Install conpy package:
    pip install conpy
-   
-   Alternative installation:
-   conda install -c conda-forge conpy
+   (alternative: conda install -c conda-forge conpy)
 
 2. Prerequisites:
-   - Run sensor space analysis first to generate CSD files:
-     - S1_Spatial_csd.h5
-     - S1_Temporal_csd.h5
+   - Run sensor_space_individual_analysis.py first to generate the CSD files:
+     <subject>_<condition_1>_csd.h5  and  <subject>_<condition_2>_csd.h5
    - FreeSurfer reconstruction completed
-   - Coregistration file (S1-trans.fif) in data folder
+   - Coregistration file (<subject>-trans.fif) in the data folder
 
 3. Connectivity Analysis Workflow:
-   
-   Step 1: Create fsaverage source space (done once)
-   - Sets up template brain with vertices
-   
-   Step 2: Morph to subject anatomy
-   - Maps template vertices to subject's brain
-   
-   Step 3: Create forward model
-   - Links source space to MEG sensors
-   
-   Step 4: Identify connectivity pairs
-   - Selects vertex pairs for connectivity estimation
-   - Usually done once across all subjects
-   
-   Step 5: Estimate connectivity
-   - Computes DICS beamformer connectivity
-   - Separate for each condition
+
+   Group-level prerequisites (run ONCE for the whole sample):
+     src_average(config)          -> fsaverage template source space
+     new_morphing(config)         -> morph the template onto every subject
+     new_morphed_forward_model()  -> forward model per subject
+     pairs_identification(config) -> shared vertices + Average-pairs.npy
+
+   Individual-level analysis (connectivity_individual_analysis.py):
+     Step 1: new_morphing            -> subject source space
+     Step 2: new_morphed_forward_model -> subject forward model
+     Step 3: connectivity_estimation -> DICS connectivity per condition
+     Step 4: connectivity_vizualization -> contrast circle plot + brain
+
+   Group-level statistics (run ONCE across subjects):
+     connectivity_statistics(config)
+     connectivity_statistics_visualization(config)
 
 4. Connectivity Method (DICS):
    - Dynamic Imaging of Coherent Sources
-   - Estimates functional connectivity in source space
-   - Uses cross-spectral density (CSD) matrices
+   - Functional connectivity in source space from CSD matrices
    - Captures frequency-specific interactions
 
-5. Parameters to Adjust:
-   
-   max_sensor_dist (0.07 m):
-   - Only includes sources visible to sensors
-   - Smaller = fewer but more reliable sources
-   - Larger = more coverage but noisier
-   
-   min_dist (0.04 m):
-   - Minimum distance between connected vertices
-   - Prevents spurious local connections
-   - Typical range: 0.03-0.05 m
-   
-   regularization (0.05):
-   - Controls noise sensitivity in inverse solution
-   - Lower (0.01): more detail, more noise
-   - Higher (0.1): smoother, less detail
+5. Key parameters to adjust:
+   max_sensor_dist (0.07 m): only sources visible to sensors
+   min_dist (0.04 m):        minimum distance between connected vertices
+   regularization (0.05):    noise sensitivity of the inverse solution
 
-6. Source Space Choice:
-   - oct6: ~4098 vertices, good balance
-   - ico4: ~2562 vertices, faster
-   - ico5: ~10242 vertices, detailed but slower
-
-7. Frequency Bands for Connectivity:
-   Common choices:
-   - Theta (4-8 Hz): Memory, attention
-   - Alpha (8-12 Hz): Attention, inhibition
-   - Beta (12-30 Hz): Motor, cognitive control
-   - Gamma (30-80 Hz): Local processing
+6. Frequency bands for connectivity:
+   Theta (4-8 Hz), Alpha (8-12 Hz), Beta (12-30 Hz), Gamma (30-80 Hz)
 """)
 
 # ============================================================================
-# EXAMPLE: Group-Level Analysis
+# EXAMPLE: Group-Level Workflow
 # ============================================================================
 
 print("\n" + "="*70)
-print("GROUP-LEVEL ANALYSIS WORKFLOW:")
+print("GROUP-LEVEL WORKFLOW (run once for the whole sample):")
 print("="*70)
 
 example_group = '''
-# Step 1: Identify connectivity pairs (do this ONCE for all subjects)
-# This creates a common set of vertex pairs across subjects
+import yaml
+from STWM_functions_for_connectivity import (
+    src_average, new_morphing, new_morphed_forward_model,
+    pairs_identification, connectivity_statistics,
+    connectivity_statistics_visualization)
 
-import numpy as np
-import mne
-import conpy
+with open('config_connectivity.yaml') as f:
+    config = yaml.safe_load(f)
 
-subjects = ['S1', 'S2', 'S3', 'S4', 'S5']
-spacing = 'oct6'
-subjects_dir = '/path/to/freesurfer/subjects'
-folder = '/path/to/data'
+subjects = ['S1', 'S2', 'S3']
 
-# Load fsaverage source space
-fsaverage = mne.read_source_spaces(f'Sub_for_con_Avg-{spacing}-src.fif')
+# Step 1: build the fsaverage template source space (once)
+src_average(config)
 
-# Load all forward models
-fwds = []
-for subj in subjects:
-    fwd = mne.read_forward_solution(f'{subj}-for_con-morphed-fwd.fif')
-    fwd_tan = conpy.forward_to_tangential(fwd)
-    fwds.append(fwd_tan)
-
-# Identify shared vertices across subjects
-vert_inds = conpy.select_shared_vertices(fwds, ref_src=fsaverage,
-                                         subjects_dir=subjects_dir)
-
-# Create connectivity pairs
-pairs = conpy.all_to_all_connectivity_pairs(fwds[0], min_dist=0.04)
-
-# Save pairs for all subjects to use
-np.save('Average-pairs.npy', pairs)
-
-print(f"Created {len(pairs[0])} connectivity pairs")
-
-# Step 2: Compute connectivity for each subject (run for each subject)
+# Step 2: morph + forward model for every subject
 for subject in subjects:
-    cmd = f'python connectivity_individual_analysis.py --config config_connectivity.yaml --subject {subject}'
-    import subprocess
-    subprocess.run(cmd, shell=True)
+    config['subject']['subject_name'] = subject
+    config['subject']['file_name']    = f'{subject}_preprocessed-raw.fif'
+    new_morphing(config)
+    new_morphed_forward_model(config)
 
-# Step 3: Load and compare connectivity across subjects
-connectivity_spatial = []
-connectivity_temporal = []
+# Step 3: identify the common connectivity pairs (once)
+pairs_identification(config)
 
+# Step 4: estimate connectivity for every subject
+import subprocess
 for subject in subjects:
-    con_s = np.load(f'{subject}_Spatial_connectivity.npy')
-    con_t = np.load(f'{subject}_Temporal_connectivity.npy')
-    connectivity_spatial.append(con_s)
-    connectivity_temporal.append(con_t)
+    subprocess.run(
+        f'python connectivity_individual_analysis.py '
+        f'--config config_connectivity.yaml --subject {subject}',
+        shell=True)
 
-# Convert to arrays
-connectivity_spatial = np.array(connectivity_spatial)   # (n_subjects, n_pairs)
-connectivity_temporal = np.array(connectivity_temporal)
-
-# Perform statistics (e.g., paired t-test)
-from scipy import stats
-t_vals, p_vals = stats.ttest_rel(connectivity_spatial, connectivity_temporal, axis=0)
-
-# Multiple comparisons correction
-from mne.stats import fdr_correction
-_, p_corrected = fdr_correction(p_vals)
-
-# Find significant connections
-sig_connections = p_corrected < 0.05
-print(f"Found {sig_connections.sum()} significant connections")
+# Step 5: group statistics and visualization
+connectivity_statistics(config)
+connectivity_statistics_visualization(config)
 '''
 
 print(example_group)
-
-# ============================================================================
-# EXAMPLE: Visualization
-# ============================================================================
-
-print("\n" + "="*70)
-print("VISUALIZATION EXAMPLE:")
-print("="*70)
-
-example_viz = '''
-import numpy as np
-import mne
-from mne.viz import circular_layout, plot_connectivity_circle
-import matplotlib.pyplot as plt
-
-# Load connectivity results
-subject = 'S1'
-con_spatial = np.load(f'{subject}_Spatial_connectivity.npy')
-con_temporal = np.load(f'{subject}_Temporal_connectivity.npy')
-pairs = np.load('Average-pairs.npy')
-
-# Load source space for label information
-fsaverage = mne.read_source_spaces('Sub_for_con_Avg-oct6-src.fif')
-
-# Load atlas labels
-labels = mne.read_labels_from_annot('fsaverage', parc='aparc',
-                                    subjects_dir='/path/to/freesurfer/subjects')
-
-# Create connectivity matrix from pairs and values
-n_vertices = len(fsaverage[0]['vertno']) + len(fsaverage[1]['vertno'])
-conn_matrix = np.zeros((n_vertices, n_vertices))
-for i, (v1, v2) in enumerate(zip(pairs[0], pairs[1])):
-    conn_matrix[v1, v2] = con_spatial[i]
-    conn_matrix[v2, v1] = con_spatial[i]  # Make symmetric
-
-# Visualize as circular plot
-label_names = [label.name for label in labels]
-label_colors = [label.color for label in labels]
-
-node_order = list(range(len(label_names)))
-node_angles = circular_layout(label_names, node_order, start_pos=90)
-
-fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
-plot_connectivity_circle(conn_matrix, label_names, n_lines=100,
-                        node_angles=node_angles, node_colors=label_colors,
-                        title='Spatial Condition Connectivity', ax=ax)
-plt.show()
-
-# Or visualize on brain surface
-brain = mne.viz.plot_connectom(
-    con_spatial[:1000],  # Plot top 1000 connections
-    pairs,
-    pos=fsaverage[0]['rr'][fsaverage[0]['vertno']],  # Vertex positions
-    node_size=5,
-    edge_cmap='RdBu_r',
-    subjects_dir='/path/to/freesurfer/subjects'
-)
-'''
-
-print(example_viz)
 
 # ============================================================================
 # TROUBLESHOOTING
@@ -302,38 +223,25 @@ print("\n" + "="*70)
 print("TROUBLESHOOTING:")
 print("="*70)
 print("""
-Common Issues:
-
 1. "conpy not found":
-   - Install: pip install conpy
-   - Or: conda install -c conda-forge conpy
+   pip install conpy  (or conda install -c conda-forge conpy)
 
 2. "CSD files not found":
-   - Run sensor_space_individual_analysis.py first
-   - Make sure CSD files are in the data folder
+   Run sensor_space_individual_analysis.py first; keep the CSD files in the
+   data folder.
 
 3. "Transformation file not found":
-   - Run coregistration: mne.gui.coregistration()
-   - Save as: S1-trans.fif in data folder
+   Run coregistration (mne.gui.coregistration()) and save as
+   <subject>-trans.fif in the data folder.
 
 4. "No vertices in sensor range":
-   - Increase max_sensor_dist (e.g., from 0.07 to 0.10)
-   - Check coregistration quality
+   Increase max_sensor_dist (e.g. 0.07 -> 0.10) and check coregistration.
 
-5. "Memory error":
-   - Use coarser source space (ico4 instead of ico5)
-   - Reduce n_jobs
-   - Process fewer connectivity pairs
+5. "Average-pairs.npy not found":
+   Run the group-level pairs_identification(config) step first.
 
-6. "Forward solution fails":
-   - Check FreeSurfer reconstruction completed
-   - Verify BEM surfaces exist
-   - Check transformation file is correct
-
-7. "Too few connectivity pairs":
-   - Decrease min_dist (e.g., from 0.04 to 0.03)
-   - Use denser source space (ico5 instead of ico4)
-   - Check that subjects have overlapping coverage
+6. "Memory error":
+   Use a coarser source space (ico4), reduce n_jobs, or fewer pairs.
 """)
 
 print("\n" + "="*70)

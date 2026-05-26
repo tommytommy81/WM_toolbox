@@ -368,3 +368,51 @@ visualization:
   hemi: 'both'                     # Hemisphere: 'lh', 'rh', 'both'
   surface: 'inflated'                # Surface type: 'inflated', 'pial', 'white'
   views: ['dorsal', 'lateral', 'medial', 'ventral']  # View angles
+
+
+# ========================================
+# CONNECTIVITY ANALYSIS PARAMETERS
+# ========================================
+# All-to-all DICS source-space connectivity (requires the `conpy` package).
+# Used by connectivity_individual_analysis.py and the connectivity functions
+# in STWM_functions_for_connectivity.py.
+connectivity:
+  spacing: 'oct6'                   # Source space decimation: 'oct6', 'ico4', 'ico5'
+  max_sensor_dist: 0.07             # Max distance source-to-sensor (m); restricts vertices
+  min_dist: 0.04                    # Min distance between connected vertices (m)
+  regularization: 0.05              # Regularization for the DICS inverse solution
+  freq_min: 8                       # Minimum frequency of the band (Hz)
+  freq_max: 12                      # Maximum frequency of the band (Hz)
+  num_subjects: 3                   # Number of subjects (group-level pair identification / stats)
+  average_ref_file: 'S1_filtered.fif'  # Reference recording used to build the fsaverage forward info
+  average_trans_file: 'Av-trans.fif'   # Coregistration for the fsaverage template
+
+  # Single-subject connectivity visualization
+  atlas: 'aparc'                    # Brain atlas: 'aparc', 'aparc.a2009s'
+  n_lines: 1000                     # Number of strongest connections to draw
+  vmin: null                        # Lower colorbar limit (null = auto)
+  vmax: null                        # Upper colorbar limit (null = auto)
+  figure: null                      # Existing figure handle (null = new figure)
+  size: 800                         # Brain figure size (pixels)
+  borders: true                     # Draw parcellation borders on the brain
+
+  # Group-level cluster-permutation statistics
+  cluster_threshold: 5.0            # Cluster-forming threshold
+  n_permutations: 1000              # Number of permutations
+  alpha: 0.05                       # Significance level for cluster p-values
+  tail: 0                           # Test tail: 0 (two-tailed), 1, or -1
+  max_spread: 0.013                 # Max spatial spread of a bundle (m)
+  seed: 42                          # RNG seed for permutations
+  summary: 'sum'                    # Parcellation summary: 'sum', 'degree', 'absmax'
+  brain_mode: 'absmax'              # make_stc mode for the brain rendering
+  hemi_stat: 'both'                 # Hemisphere for the statistics rendering
+  views: ['lateral', 'medial']      # Views for the statistics rendering
+
+  # Statistics visualization (unilaterality / parcellated circle plot)
+  regexp: null                      # Regular expression to select labels (null = all)
+  weight_by_degree: false           # Weight parcellation by node degree
+  n_lines_stat: 100                 # Number of connections in the statistics circle plot
+  vmin_stat: null                   # Lower colorbar limit for statistics (null = auto)
+  vmax_stat: null                   # Upper colorbar limit for statistics (null = auto)
+  fontsize_names: 8                 # Font size for label names in circle plot
+  fontsize_colorbar: 8              # Font size for the colorbar
