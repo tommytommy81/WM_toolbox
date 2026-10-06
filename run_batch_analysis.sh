@@ -45,7 +45,7 @@ if [ "$PARALLEL" = false ]; then
         echo "Processing subject: $subj"
         echo "----------------------------------------"
         
-        python sensor_space_individual_analysis.py \
+        python cli/stwm.py sensor \
             --config "$CONFIG_FILE" \
             --subject "$subj"
         
@@ -63,14 +63,14 @@ else
     for subj in "${SUBJECTS[@]}"; do
         sbatch --job-name="meg_$subj" \
                --output="logs/meg_${subj}_%j.out" \
-               --wrap="python sensor_space_individual_analysis.py --config $CONFIG_FILE --subject $subj"
+               --wrap="python cli/stwm.py sensor --config $CONFIG_FILE --subject $subj"
     done
     
     echo "Jobs submitted. Waiting for completion..."
     echo "Check job status with: squeue -u $USER"
     echo ""
     echo "After all jobs complete, run group statistics manually:"
-    echo "  python sensor_space_group_statistics.py --config $CONFIG_FILE"
+    echo "  python cli/stwm.py sensor-group --config $CONFIG_FILE"
     exit 0
 fi
 
@@ -80,7 +80,7 @@ echo "Step 2: Running group-level statistics"
 echo "========================================"
 echo ""
 
-python sensor_space_group_statistics.py --config "$CONFIG_FILE"
+python cli/stwm.py sensor-group --config "$CONFIG_FILE"
 
 if [ $? -eq 0 ]; then
     echo ""

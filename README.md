@@ -22,33 +22,35 @@ This repository contains a comprehensive, modular pipeline for analyzing MEG (Ma
 
 ```
 .
-├── README.md                                # This file
-├── requirements.txt                         # Python dependencies
-├── config.yaml                              # Main configuration file
+├── README.md
+├── requirements.txt
+├── config.yaml                         # All analysis parameters
+├── activate_env.sh                     # Environment activation
+├── run_batch_analysis.sh               # Batch sensor analysis (calls the CLI)
 │
-├── Core Analysis Scripts
-│   ├── sensor_space_individual_analysis.py      # Sensor-level analysis
-│   ├── sensor_space_group_statistics.py         # Sensor-level statistics
-│   ├── source_space_individual_analysis.py      # Source localization
-│   └── connectivity_individual_analysis.py      # Connectivity estimation
+├── notebooks/                          # Interactive, step-by-step examples
+│   ├── example_usage_sensor.ipynb
+│   ├── example_usage_sensor_complete.ipynb
+│   ├── example_usage_source_complete.ipynb
+│   ├── example_usage_source_group_statistics.ipynb
+│   ├── example_usage_connectivity.ipynb
+│   └── TFr_code.ipynb
 │
-├── Example Usage & Guides
-│   ├── example_usage_sensor.py                  # Sensor analysis guide
-│   ├── example_usage_source.py                  # Source analysis guide
-│   └── example_usage_connectivity.py            # Connectivity guide
+├── utils/                              # All analysis code, one module per notebook family
+│   ├── __init__.py                     # load_config, CONFIG_PATH
+│   ├── sensor.py                       # sensor notebooks: preprocessing, TFR, FOOOF, CSD,
+│   │                                   #   group stats, VisualInspector, fig_3 / fig_4
+│   ├── source.py                       # source notebooks: source space, forward, DICS,
+│   │                                   #   morphing, group stats, fig_5
+│   └── connectivity.py                 # connectivity notebook: conpy pipeline, stats,
+│                                       #   fig_6 / fig_merge
 │
-├── Core Functions
-│   ├── STWM_functions_core.py                   # Core processing functions
-│   └── STWM - functions for connectivity        # Connectivity utilities
-│
-├── Utilities
-│   ├── visual_inspection.py                     # Optional QC visualization
-│   ├── activate_env.sh                          # Environment activation
-│   └── run_batch_analysis.sh                    # Batch processing script
-│
-└── Legacy Code (for reference)
-    └── WMspatiotemporal/                        # Original analysis scripts
+└── cli/
+    └── stwm.py                         # Single command-line entry point
 ```
+
+Notebooks add the repository root to `sys.path` and import from `utils`, e.g.
+`from utils.sensor import run_individual_analysis`.
 
 ---
 
@@ -96,13 +98,18 @@ conditions:
 
 ```bash
 # Sensor space analysis
-python sensor_space_individual_analysis.py --config config.yaml --subject S1
+python cli/stwm.py sensor --subject S1
 
 # Source space analysis (requires FreeSurfer reconstruction)
-python source_space_individual_analysis.py --config config.yaml --subject S1
+python cli/stwm.py source --subject S1
 
 # Connectivity analysis (requires conpy package)
-python connectivity_individual_analysis.py --config config.yaml --subject S1
+python cli/stwm.py connectivity --subject S1
+
+# Group level
+python cli/stwm.py sensor-group
+python cli/stwm.py source-group
+python cli/stwm.py connectivity-group --step stats
 ```
 
 ---
@@ -125,11 +132,9 @@ python connectivity_individual_analysis.py --config config.yaml --subject S1
 
 **Example:**
 ```python
-# Run the example script
-python example_usage_sensor.py
-
-# Or directly
-python sensor_space_individual_analysis.py --config config.yaml --subject S1
+# Interactive: notebooks/example_usage_sensor_complete.ipynb
+# Command line:
+python cli/stwm.py sensor --subject S1
 ```
 
 **Key Features:**
@@ -165,11 +170,9 @@ python sensor_space_individual_analysis.py --config config.yaml --subject S1
 
 **Example:**
 ```python
-# Run the example script for detailed guidance
-python example_usage_source.py
-
-# Run analysis
-python source_space_individual_analysis.py --config config.yaml --subject S1
+# Interactive: notebooks/example_usage_source_complete.ipynb
+# Command line:
+python cli/stwm.py source --subject S1
 ```
 
 ---
@@ -199,14 +202,12 @@ python source_space_individual_analysis.py --config config.yaml --subject S1
 
 **Example:**
 ```python
-# Run the example script for detailed guidance
-python example_usage_connectivity.py
-
-# Run analysis
-python connectivity_individual_analysis.py --config config.yaml --subject S1
+# Interactive: notebooks/example_usage_connectivity.ipynb
+# Command line:
+python cli/stwm.py connectivity --subject S1
 ```
 
-**Note:** Connectivity pair identification is typically done once across all subjects. See `example_usage_connectivity.py` for group-level workflow.
+**Note:** Connectivity pair identification is typically done once across all subjects. Group steps: `python cli/stwm.py connectivity-group --step template|pairs|stats|viz` (see `notebooks/example_usage_connectivity.ipynb`).
 
 ---
 
@@ -305,7 +306,7 @@ SUBJECTS=("S1" "S2" "S3" "S4" "S5")
 
 for subject in "${SUBJECTS[@]}"; do
     echo "Processing $subject..."
-    python sensor_space_individual_analysis.py \
+    python cli/stwm.py sensor \
         --config config.yaml \
         --subject "$subject"
 done
@@ -326,7 +327,7 @@ for subject in subjects:
     print(f"{'='*60}\n")
     
     cmd = [
-        'python', 'sensor_space_individual_analysis.py',
+        'python', 'cli/stwm.py', 'sensor',
         '--config', config_file,
         '--subject', subject
     ]
@@ -337,7 +338,7 @@ for subject in subjects:
 
 ### Interactive Analysis (Jupyter)
 
-See `example_usage_sensor.ipynb` for an interactive notebook example.
+See the notebooks in `notebooks/` (start Jupyter from the repository root or from `notebooks/`).
 
 ---
 
