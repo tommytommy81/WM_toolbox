@@ -374,8 +374,8 @@ visualization:
 # CONNECTIVITY ANALYSIS PARAMETERS
 # ========================================
 # All-to-all DICS source-space connectivity (requires the `conpy` package).
-# Used by connectivity_individual_analysis.py and the connectivity functions
-# in STWM_functions_for_connectivity.py.
+# Used by utils/connectivity.py (notebooks/example_usage_connectivity.ipynb,
+# `python cli/stwm.py connectivity*`).
 connectivity:
   spacing: 'oct6'                   # Source space decimation: 'oct6', 'ico4', 'ico5'
   max_sensor_dist: 0.07             # Max distance source-to-sensor (m); restricts vertices
